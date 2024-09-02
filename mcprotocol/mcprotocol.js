@@ -2248,11 +2248,17 @@ function processMCReadItem(theItem, isAscii, frame) {
 				}
 				switch (theItem.datatype) {
 					case "FLOAT":
-					case "REAL":
 						if (isAscii) {
 							theItem.value.push(theItem.byteBuffer.getFloatBESwap(thePointer));
 						} else {
 							theItem.value.push(theItem.byteBuffer.readFloatLE(thePointer));
+						}
+						break;
+					case "REAL":
+						if (isAscii) {
+							theItem.value.push(theItem.byteBuffer.getDoubleBESwap(thePointer));
+						} else {
+							theItem.value.push(theItem.byteBuffer.readDoubleLE(thePointer));
 						}
 						break;
 					case "DWORD":
@@ -2371,8 +2377,14 @@ function processMCReadItem(theItem, isAscii, frame) {
 			theItem.quality = (qualItem.desc);
 			outputLog("Item Datatype (single value) is " + theItem.datatype, "TRACE");
 			switch (theItem.datatype) {
-				case "FLOAT":
 				case "REAL":
+					if (isAscii) {
+						theItem.value = theItem.byteBuffer.getDoubleBESwap(thePointer);
+					} else {
+						theItem.value = theItem.byteBuffer.readDoubleLE(thePointer);
+					}
+					break;
+				case "FLOAT":
 					if (isAscii) {
 						theItem.value = theItem.byteBuffer.getFloatBESwap(thePointer);
 					} else {
@@ -2492,6 +2504,33 @@ Buffer.prototype.setPointer = function (pos) {
 	return ptr;
 }
 
+Buffer.prototype.setDoubleBESwap = function (val, ptr) {
+	var newBuf = Buffer.alloc(8);
+	newBuf.writeDoubleBE(val, 0);
+	this[ptr + 2] = newBuf[0];
+	this[ptr + 3] = newBuf[1];
+	this[ptr + 0] = newBuf[2];
+	this[ptr + 1] = newBuf[3];
+	this[ptr + 6] = newBuf[4];
+	this[ptr + 7] = newBuf[5];
+	this[ptr + 4] = newBuf[6];
+	this[ptr + 5] = newBuf[7];
+	return ptr + 8;
+}
+
+Buffer.prototype.getDoubleBESwap = function(ptr) {
+	var newBuf = Buffer.alloc(8);
+	newBuf[0] = this[ptr + 2];
+	newBuf[1] = this[ptr + 3];
+	newBuf[2] = this[ptr + 0];
+	newBuf[3] = this[ptr + 1];
+	newBuf[4] = this[ptr + 6];
+	newBuf[5] = this[ptr + 7];
+	newBuf[6] = this[ptr + 4];
+	newBuf[7] = this[ptr + 5];
+	return newBuf.readDoubleBE(0);
+}
+
 Buffer.prototype.setFloatBESwap = function (val, ptr) {
 	var newBuf = Buffer.alloc(4);
 	newBuf.writeFloatBE(val, 0);
@@ -2575,7 +2614,7 @@ Buffer.prototype.addUint32LE = function (v) {
 	return this.pointer;
 }
 
-//https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080008/sh080008x.pdf PG 464
+//https://dl.mitsubishielectric.com/dl/fa/document/manual/plc/sh080008/sh080008ab.pdf PG 464
 MCProtocol.prototype.enumMaxWordLength = _enum({
 	batchReadWordUnits04010000: { //Batch read in word units (command: 0401) PG86
 		description: "Batch read in word units",
@@ -2755,7 +2794,7 @@ MCProtocol.prototype.enumDeviceCodeSpecL = MCProtocol.prototype.enumDeviceCodeSp
 //MCProtocol.prototype.enumDeviceCodeSpec = MCProtocol.prototype.enumDeviceCodeSpecQ;//default to Q/L series
 
 MCProtocol.prototype.enumDataTypes = _enum({
-	REAL: { name: "REAL", dataLength: 4, badValue: 0.0 },
+	REAL: { name: "REAL", dataLength: 8, badValue: 0.0 },
 	FLOAT: { name: "FLOAT", dataLength: 4, badValue: 0.0 },
 	DWORD: { name: "DWORD", dataLength: 4, badValue: 0 },
 	DINT: { name: "DINT", dataLength: 4, badValue: 0 },
@@ -3191,6 +3230,12 @@ function PLCItem(owner) { // Object
 		let dt = dts[theItem.datatype];
 		switch (dt.name) {
 			case dts.REAL.name:
+				// REAL is 64bit / four-byte
+				theItem.remainder = 0;
+				theItem.dtypelen = 8;
+				theItem.multidtypelen = 8;
+				theItem.requestOffset = theItem.offset;
+				break;
 			case dts.FLOAT.name:
 			case dts.DINT.name:
 			case dts.DWORD.name:
@@ -3686,11 +3731,18 @@ function PLCItem(owner) { // Object
 				var stringNullFound = false;
 				for (arrayIndex = 0; arrayIndex < theItem.arrayLength; arrayIndex++) {
 					switch (theItem.datatype) {
-						case "REAL":
+						case "FLOAT":
 							if (isAscii) {
 								theItem.writeBuffer.setFloatBESwap(theItem.writeValue[arrayIndex], thePointer)
 							} else {
 								theItem.writeBuffer.writeFloatLE(theItem.writeValue[arrayIndex], thePointer);
+							}
+							break;
+						case "REAL":
+							if (isAscii) {
+								theItem.writeBuffer.setDoubleBESwap(theItem.writeValue[arrayIndex], thePointer)
+							} else {
+								theItem.writeBuffer.writeDoubleLE(theItem.writeValue[arrayIndex], thePointer);
 							}
 							break;
 						case "DWORD":
@@ -3781,11 +3833,18 @@ function PLCItem(owner) { // Object
 				// Single value. 
 				switch (theItem.datatype) {
 	
-					case "REAL":
+					case "FLOAT":
 						if (isAscii) {
 							theItem.writeBuffer.setFloatBESwap(theItem.writeValue, thePointer);
 						} else {
 							theItem.writeBuffer.writeFloatLE(theItem.writeValue, thePointer);
+						}
+						break;
+					case "REAL":
+						if (isAscii) {
+							theItem.writeBuffer.setDoubleBESwap(theItem.writeValue, thePointer);
+						} else {
+							theItem.writeBuffer.writeDoubleLE(theItem.writeValue, thePointer);
 						}
 						break;
 					case "DWORD":
